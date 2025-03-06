@@ -1,17 +1,25 @@
-import socket
 import argparse
+import asyncio
+import socket
 import sys
+import logging
 
-from concurrent.futures import ThreadPoolExecutor
-from tqdm import tqdm
 from rich.console import Console
 from rich.table import Table
 from rich.theme import Theme
+from tqdm import tqdm
 
 DEFAULT_START_PORT = 1
 DEFAULT_END_PORT = 65535
-DEFAULT_TIMEOUT = 1
-DEFAULT_THREADS = 10
+DEFAULT_TIMEOUT = 1.0
+DEFAULT_CONCURRENCY = 1000
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    filename="port_scanner.log",
+    filemode="a",
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 
 custom_theme = Theme(
     {
@@ -32,43 +40,42 @@ def validate_ip(target: str) -> str:
         raise argparse.ArgumentTypeError(f"Invalid IP address or domain name: {target}")
 
 
-def scan_port(
-    target: str, port: int, timeout: float = DEFAULT_TIMEOUT
-) -> tuple[int, str | None]:
+async def scan_port(target: str, port: int, timeout: float) -> tuple[int, bool]:
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(timeout)
-            s.connect((target, port))
-            return port, None
-    except socket.timeout:
-        return port, "Timeout"
-    except ConnectionRefusedError:
-        return port, "Connection Refused"
-    except OSError as e:
-        return port, str(e)
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection(host=target, port=port), timeout=timeout
+        )
+        writer.close()
+        if sys.version_info >= (3, 7):
+            await writer.wait_closed()
+        return port, True
+    except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
+        logging.debug(f"Port {port}: {e}")
+        return port, False
 
 
-def scan_target(
-    target: str,
-    start_port: int = DEFAULT_START_PORT,
-    end_port: int = DEFAULT_END_PORT,
-    timeout: float = DEFAULT_TIMEOUT,
-    threads: int = DEFAULT_THREADS,
+async def scan_target(
+    target: str, start_port: int, end_port: int, timeout: float, concurrency: int
 ) -> list[int]:
-    ports = range(start_port, end_port + 1)
     open_ports = []
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        futures = [executor.submit(scan_port, target, p, timeout) for p in ports]
-        with tqdm(total=len(ports), desc="Scanning ports", unit="port") as progress_bar:
-            for future in futures:
-                port, error_msg = future.result()
-                if error_msg is None:
-                    open_ports.append(port)
-                progress_bar.update(1)
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def sem_scan(port: int):
+        async with semaphore:
+            return await scan_port(target, port, timeout)
+
+    ports = range(start_port, end_port + 1)
+    tasks = [asyncio.create_task(sem_scan(port)) for port in ports]
+    with tqdm(total=len(ports), desc="Scanning ports", unit="port") as progress_bar:
+        for future in asyncio.as_completed(tasks):
+            port, is_open = await future
+            if is_open:
+                open_ports.append(port)
+            progress_bar.update(1)
     return open_ports
 
 
-def display_results(target: str, open_ports: list[int]):
+def display_results(target: str, open_ports: list[int]) -> None:
     console.rule("[header]Scan Results[/header]")
     if open_ports:
         table = Table(
@@ -84,7 +91,7 @@ def display_results(target: str, open_ports: list[int]):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="A simple port scanner.")
+    parser = argparse.ArgumentParser(description="Asynchronous Port Scanner")
     parser.add_argument(
         "target", help="The IP address or domain name to scan.", type=validate_ip
     )
@@ -110,11 +117,11 @@ def main():
         help="The timeout in seconds (default: 1).",
     )
     parser.add_argument(
-        "-T",
-        "--threads",
+        "-c",
+        "--concurrency",
         type=int,
-        default=DEFAULT_THREADS,
-        help="The number of threads (default: 10).",
+        default=DEFAULT_CONCURRENCY,
+        help="Maximum concurrent connections (default: 1000).",
     )
     args = parser.parse_args()
     if not 1 <= args.start_port <= 65535:
@@ -125,12 +132,18 @@ def main():
         parser.error("Start port cannot be greater than end port.")
     if args.timeout <= 0:
         parser.error("Timeout must be greater than 0.")
-    if args.threads <= 0:
-        parser.error("Threads must be greater than 0.")
+    if args.concurrency <= 0:
+        parser.error("Concurrency must be greater than 0.")
     console.print("\n[success]Scanning...[/success]\n")
     try:
-        open_ports = scan_target(
-            args.target, args.start_port, args.end_port, args.timeout, args.threads
+        open_ports = asyncio.run(
+            scan_target(
+                args.target,
+                args.start_port,
+                args.end_port,
+                args.timeout,
+                args.concurrency,
+            )
         )
         console.print("\n")
         display_results(args.target, open_ports)
