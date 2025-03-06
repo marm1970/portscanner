@@ -1,70 +1,85 @@
-# Multi-Threaded Port Scanner
+# 🔍 Asynchronous Port Scanner
 
-A fast, multi-threaded Python port scanner with rich visual output to identify open ports on a target.
+A high-performance, asynchronous Python port scanner with rich visual output, designed to efficiently identify open ports on a target system.
 
-## Installation
+## 🚀 Installation
 
 Follow these steps to set up the project:
 
-1. **Clone the Repository**:
+### 1️⃣ Clone the Repository
    ```bash
    git clone https://github.com/marm1970/portscanner.git
    cd portscanner
    ```
 
-2. **Create a Virtual Environment**:
+### 2️⃣ Create a Virtual Environment
    ```bash
    python -m venv venv
    ```
 
-3. **Activate the Virtual Environment**:
-   - On **Windows**:
+### 3️⃣ Activate the Virtual Environment
+   - **Windows**:
      ```bash
      venv\Scripts\Activate.ps1
      ```
-   - On **Mac/Linux**:
+   - **Mac/Linux**:
      ```bash
      source venv/bin/activate
      ```
 
-4. **Install Dependencies**:
+### 4️⃣ Install Dependencies
    ```bash
    python -m pip install rich tqdm
    ```
 
-## Usage
+## ⚡ Usage
 
-1. Run the script:
-   ```bash
-   python main.py
-   ```
+Run the script using the following syntax:
 
-2. Follow the prompts to:
-   - Enter the target IP address or domain.
-   - Specify the port range to scan.
-   - Set timeout and thread count (optional).
+```bash
+python main.py <target> [options]
+```
 
-3. View the results in a clean, visualized table showing open ports.
+### Required Argument:
+- `<target>`: The IP address or domain to scan.
 
-## Contributing
+### Optional Arguments:
+- `-s, --start-port <port>`: Starting port (default: `1`).
+- `-e, --end-port <port>`: Ending port (default: `65535`).
+- `-t, --timeout <seconds>`: Timeout for each connection attempt (default: `1.0`).
+- `-c, --concurrency <num>`: Maximum concurrent connections (default: `1000`).
 
-Contributions are welcome! To contribute:
+### Example Usage:
 
-1. Fork the repository.
-2. Create a new branch for your feature or bugfix:
+```bash
+python main.py example.com -s 20 -e 1000 -t 0.5 -c 500
+```
+
+This scans ports `20-1000` on `example.com` with a timeout of `0.5` seconds per port and a concurrency level of `500`.
+
+## 📊 Output
+
+Results are displayed in a structured, visually formatted table using `rich`. Open ports will be highlighted with a ✅ marker for easy identification.
+
+## 🤝 Contributing
+
+Contributions are welcome! Follow these steps to contribute:
+
+1️⃣ **Fork the repository**  
+2️⃣ **Create a new branch**  
    ```bash
    git checkout -b feature-name
    ```
-3. Commit your changes:
+3️⃣ **Commit your changes**  
    ```bash
-   git commit -m "Add your message here"
+   git commit -m "Describe your changes"
    ```
-4. Push to your branch:
+4️⃣ **Push to your branch**  
    ```bash
    git push origin feature-name
    ```
-5. Open a pull request and provide details about your changes.
+5️⃣ **Open a pull request** and provide details about your changes.
 
 ---
 
-Feel free to suggest improvements, report bugs, or share feedback!
+💡 Have suggestions or found a bug? Feel free to open an issue or submit a pull request!
